@@ -1,71 +1,69 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    // path inside agent where we'll write the service account file
-    GCP_SA_JSON = 'gcp-sa.json'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout(scm)
-      }
+    // Add a parameter for VM name
+    parameters {
+        choice(
+            name: 'VM_NAME',
+            choices: ['vm-1', 'vm-2', 'vm-3'], // List of VM names to choose from
+            description: 'Select the name of the VM to create'
+        )
     }
 
-    stage('Prepare credentials') {
-      steps {
-        // using credentials binding plugin to get the secret file content
-        withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GCP_SA_FILE')]) {
-          sh '''
-            # copy Jenkins-managed secret file to known path
-            cp "$GCP_SA_FILE" ${GCP_SA_JSON}
-            chmod 600 ${GCP_SA_JSON}
-            ls -l ${GCP_SA_JSON}
-            cat ${GCP_SA_JSON} | head -n 2
-          '''
+    environment {
+        GCP_SA_JSON = 'gcp-sa.json'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout(scm)
+            }
         }
-      }
+
+        stage('Prepare credentials') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-sa-key', variable: 'GCP_SA_FILE')]) {
+                    sh '''
+                        cp "$GCP_SA_FILE" ${GCP_SA_JSON}
+                        chmod 600 ${GCP_SA_JSON}
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}"]) {
+                    sh 'terraform init -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}"]) {
+                    sh """
+                        terraform plan -input=false -out=tfplan \
+                        -var="vm_name=${params.VM_NAME}"
+                    """
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                input message: "Apply terraform changes?", ok: "Apply"
+                withEnv(["GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}"]) {
+                    sh 'terraform apply -input=false tfplan'
+                }
+            }
+        }
     }
 
-    stage('Terraform Init') {
-      steps {
-        sh '''
-          # Install terraform if not available (for demo) - ideally install on agent image
-          if ! command -v terraform >/dev/null 2>&1; then
-            echo "Terraform not found. Please install Terraform on the agent."
-            exit 1
-          fi
-
-          export GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}
-          terraform init -input=false
-        '''
-      }
+    post {
+        always {
+            sh 'rm -f ${GCP_SA_JSON} tfplan'
+        }
     }
-
-    stage('Terraform Plan') {
-      steps {
-        sh '''
-          export GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}
-          terraform plan -input=false -out=tfplan
-        '''
-      }
-    }
-
-    stage('Terraform Apply') {
-      steps {
-        input message: "Apply terraform changes?", ok: "Apply"
-        sh '''
-          export GOOGLE_APPLICATION_CREDENTIALS=${GCP_SA_JSON}
-          terraform apply -input=false tfplan
-        '''
-      }
-    }
-  }
-
-  post {
-    always {
-      sh 'rm -f ${GCP_SA_JSON} tfplan'
-    }
-  }
 }

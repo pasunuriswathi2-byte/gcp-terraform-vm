@@ -1,0 +1,5 @@
+project_id     = "gcp-terraform-vm"
+region         = "us-central1"
+zone           = "us-central1-a"
+machine_type   = "e2-medium"
+vm_name        = "jenkins-vm"

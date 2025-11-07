@@ -1,12 +1,12 @@
 pipeline {
     agent any
 
-    // Add a parameter for VM name
+    // Parameter for user to enter VM name
     parameters {
-        choice(
+        string(
             name: 'VM_NAME',
-            choices: ['vm-1', 'vm-2', 'vm-3'], // List of VM names to choose from
-            description: 'Select the name of the VM to create'
+            defaultValue: '',
+            description: 'Enter the name of the VM to create'
         )
     }
 

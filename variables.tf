@@ -45,3 +45,8 @@ variable "image_project" {
   type        = string
   default     = "debian-cloud"
 }
+variable "gcp_credentials_file" {
+  description = "Path to the GCP service account JSON key file"
+  type        = string
+}
+
